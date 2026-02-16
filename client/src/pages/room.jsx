@@ -178,9 +178,9 @@ const uploadVideo = async(file)=>{
 const formData = new FormData();
 formData.append("video",file);
 
-const res = await fetch("http://localhost:5000/upload",{
-method:"POST",
-body:formData
+const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/upload`,{
+  method:"POST",
+  body:formData
 });
 
 const data = await res.json();
