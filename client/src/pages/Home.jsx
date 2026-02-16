@@ -8,14 +8,23 @@ const navigate = useNavigate();
 const [roomId,setRoomId] = useState("");
 const [isPrivate,setIsPrivate] = useState(false);
 const [password,setPassword] = useState("");
+const [username, setUsername] = useState(
+ localStorage.getItem("watchparty-username") || ""
+);
 
 
-// CREATE ROOM
+// ✅ CREATE ROOM
 const createRoom = ()=>{
+
+if(!username.trim()){
+  alert("Please enter your name");
+  return;
+}
+
+localStorage.setItem("watchparty-username", username);
 
 const id = crypto.randomUUID().slice(0,6);
 
-// pass params in URL
 if(isPrivate){
 navigate(`/room/${id}?private=true&pass=${password}`);
 }else{
@@ -25,10 +34,20 @@ navigate(`/room/${id}`);
 };
 
 
-// JOIN ROOM
+// ✅ JOIN ROOM
 const joinRoom = ()=>{
 
-if(!roomId) return alert("Enter Room ID");
+if(!username.trim()){
+  alert("Please enter your name");
+  return;
+}
+
+if(!roomId){
+  alert("Enter Room ID");
+  return;
+}
+
+localStorage.setItem("watchparty-username", username);
 
 if(isPrivate){
 navigate(`/room/${roomId}?private=true&pass=${password}`);
@@ -37,6 +56,7 @@ navigate(`/room/${roomId}`);
 }
 
 };
+
 
 
 return(
@@ -61,6 +81,22 @@ textAlign:"center"
 }}>
 
 <h1 style={{marginBottom:"20px"}}>🎬 Watch Party</h1>
+
+
+{/* USERNAME INPUT */}
+
+<input
+placeholder="Enter your name..."
+value={username}
+onChange={(e)=>setUsername(e.target.value)}
+style={{
+width:"100%",
+padding:"12px",
+borderRadius:"10px",
+border:"none",
+marginBottom:"15px"
+}}
+/>
 
 
 {/* ROOM INPUT */}

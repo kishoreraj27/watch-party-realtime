@@ -72,26 +72,18 @@ console.log("User connected:",socket.id);
 
 
 // JOIN ROOM
-socket.on("join-room",(roomId,callback)=>{
+socket.on("join-room",({roomId, username})=>{
 
-if(!rooms[roomId]){
-rooms[roomId]={
-host:socket.id,
-users:[]
-};
-
-console.log("👑 Host assigned:",socket.id);
-}
-
-rooms[roomId].users.push(socket.id);
-
+socket.username = username;
 socket.join(roomId);
 
-const isHost = rooms[roomId].host === socket.id;
-
-callback?.({success:true,isHost});
+io.to(roomId).emit("chat-message",{
+   user:"System",
+   message:`${username} joined the party 🎉`
+});
 
 });
+
 
 
 // PLAY

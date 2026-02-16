@@ -15,20 +15,20 @@ const [input,setInput] = useState("");
 const [isHost,setIsHost] = useState(false);
 const [videoURL,setVideoURL] = useState("");
 
-const username = "User" + Math.floor(Math.random()*1000);
+const username = localStorage.getItem("watchparty-username") || "Guest";
 
 
-// ✅ JOIN ROOM
+// ================= JOIN ROOM =================
+
 useEffect(()=>{
 
-socket.emit("join-room", id, (res)=>{
-if(res?.isHost){
-setIsHost(true);
-}
+socket.emit("join-room",{
+roomId:id,
+username
 });
 
 
-// PLAY
+// 🔥 PLAY
 socket.on("play",(time)=>{
 
 const video = videoRef.current;
@@ -38,15 +38,16 @@ isRemoteAction.current = true;
 
 const diff = Math.abs(video.currentTime - time);
 
-if(diff > 0.25){
+if(diff > 0.3){
 video.currentTime = time;
 }
 
 video.play();
+
 });
 
 
-// PAUSE
+// 🔥 PAUSE
 socket.on("pause",(time)=>{
 
 const video = videoRef.current;
@@ -56,39 +57,44 @@ isRemoteAction.current = true;
 
 const diff = Math.abs(video.currentTime - time);
 
-if(diff > 0.25){
+if(diff > 0.3){
 video.currentTime = time;
 }
 
 video.pause();
+
 });
 
 
-// SEEK
+// 🔥 SEEK
 socket.on("seek",(time)=>{
 isRemoteAction.current = true;
+
+if(videoRef.current){
 videoRef.current.currentTime = time;
+}
 });
 
 
-// VIDEO CHANGE
+// 🔥 VIDEO CHANGE
 socket.on("video-change",(url)=>{
 
 setVideoURL(url);
 
+// small delay helps browser reload source
 setTimeout(()=>{
-videoRef.current.load();
+videoRef.current?.load();
 },300);
 
 });
 
 
-// HOST CHANGE
+// 🔥 HOST CHANGE
 socket.on("host-changed",(newHost)=>{
 
 if(socket.id === newHost){
 setIsHost(true);
-alert("You are the new Host 👑");
+alert("You are the Host 👑");
 }else{
 setIsHost(false);
 }
@@ -96,7 +102,7 @@ setIsHost(false);
 });
 
 
-// CHAT
+// 🔥 CHAT
 socket.on("chat-message",(msg)=>{
 setMessages(prev=>[...prev,msg]);
 });
@@ -109,18 +115,19 @@ socket.off("play");
 socket.off("pause");
 socket.off("seek");
 socket.off("video-change");
-socket.off("chat-message");
 socket.off("host-changed");
+socket.off("chat-message");
 
 };
 
 },[id]);
 
 
-// AUTO SCROLL
+// AUTO SCROLL CHAT
 useEffect(()=>{
 chatEndRef.current?.scrollIntoView({behavior:"smooth"});
 },[messages]);
+
 
 
 // ================= LOCAL CONTROLS =================
@@ -138,6 +145,7 @@ socket.emit("play",{
 roomId:id,
 time:videoRef.current.currentTime
 });
+
 };
 
 const handlePause = ()=>{
@@ -153,6 +161,7 @@ socket.emit("pause",{
 roomId:id,
 time:videoRef.current.currentTime
 });
+
 };
 
 const handleSeek = ()=>{
@@ -168,20 +177,30 @@ socket.emit("seek",{
 roomId:id,
 time:videoRef.current.currentTime
 });
+
 };
+
 
 
 // ================= UPLOAD =================
 
 const uploadVideo = async(file)=>{
 
+if(!file) return;
+
 const formData = new FormData();
 formData.append("video",file);
 
+try{
+
 const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/upload`,{
-  method:"POST",
-  body:formData
+method:"POST",
+body:formData
 });
+
+if(!res.ok){
+throw new Error("Upload failed");
+}
 
 const data = await res.json();
 
@@ -191,16 +210,21 @@ socket.emit("video-change",{
 roomId:id,
 url:data.url
 });
+
+}catch(err){
+alert("Upload failed — try again.");
+}
+
 };
+
 
 
 // ================= GOOGLE DRIVE =================
 
 const convertDriveLink = (link) => {
 
-let fileId = "";
+let fileId="";
 
-// Handles multiple drive formats
 if(link.includes("/file/d/")){
 fileId = link.split("/file/d/")[1].split("/")[0];
 }
@@ -208,9 +232,14 @@ else if(link.includes("id=")){
 fileId = link.split("id=")[1];
 }
 
-return `https://drive.google.com/uc?export=open&id=${fileId}`;
-};
+if(!fileId){
+alert("Invalid Google Drive link");
+return "";
+}
 
+// download works better for video tag
+return `https://drive.google.com/uc?export=download&id=${fileId}`;
+};
 
 
 
@@ -227,6 +256,7 @@ user:username
 });
 
 setInput("");
+
 };
 
 
@@ -307,12 +337,15 @@ if(e.key==="Enter"){
 
 const url = convertDriveLink(e.target.value);
 
+if(!url) return;
+
 setVideoURL(url);
 
 socket.emit("video-change",{
 roomId:id,
 url
 });
+
 }
 }}
 style={{
@@ -339,9 +372,11 @@ borderRadius:"15px",
 boxShadow:"0 10px 40px rgba(0,0,0,0.7)"
 }}
 >
+
 {videoURL && (
 <source src={videoURL} type="video/mp4"/>
 )}
+
 </video>
 
 {!isHost && (
@@ -354,7 +389,7 @@ Host is controlling the video 🎬
 
 
 
-{/* CHAT SIDE */}
+{/* CHAT */}
 
 <div style={{
 background:"rgba(0,0,0,0.3)",
@@ -386,6 +421,11 @@ overflowY:"auto"
 <input
 value={input}
 onChange={(e)=>setInput(e.target.value)}
+onKeyDown={(e)=>{
+if(e.key==="Enter"){
+sendMessage();
+}
+}}
 placeholder="Type message..."
 style={{
 width:"70%",
