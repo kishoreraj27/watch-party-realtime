@@ -223,7 +223,7 @@ alert("Upload failed — try again.");
 
 const convertDriveLink = (link) => {
 
-let fileId="";
+let fileId = "";
 
 if(link.includes("/file/d/")){
 fileId = link.split("/file/d/")[1].split("/")[0];
@@ -237,8 +237,8 @@ alert("Invalid Google Drive link");
 return "";
 }
 
-// download works better for video tag
-return `https://drive.google.com/uc?export=download&id=${fileId}`;
+// ⭐ Use preview — MUCH more stable
+return `https://drive.google.com/file/d/${fileId}/preview`;
 };
 
 
@@ -317,48 +317,23 @@ marginTop:"20px"
 }}>
 
 
-{/* VIDEO SIDE */}
+{/* SMART VIDEO PLAYER */}
 
-<div>
+{videoURL && videoURL.includes("drive.google.com") ? (
 
-{isHost && (
-<>
-<input
-type="file"
-accept="video/*"
-onChange={(e)=>uploadVideo(e.target.files[0])}
-style={{marginBottom:"10px"}}
-/>
-
-<input
-placeholder="Paste Google Drive link & press Enter"
-onKeyDown={(e)=>{
-if(e.key==="Enter"){
-
-const url = convertDriveLink(e.target.value);
-
-if(!url) return;
-
-setVideoURL(url);
-
-socket.emit("video-change",{
-roomId:id,
-url
-});
-
-}
-}}
+<iframe
+src={videoURL}
+width="100%"
+height="500"
+allow="autoplay"
 style={{
-width:"100%",
-padding:"10px",
-borderRadius:"8px",
+borderRadius:"15px",
 border:"none",
-marginBottom:"10px"
+boxShadow:"0 10px 40px rgba(0,0,0,0.7)"
 }}
 />
-</>
-)}
 
+) : (
 
 <video
 ref={videoRef}
@@ -379,13 +354,7 @@ boxShadow:"0 10px 40px rgba(0,0,0,0.7)"
 
 </video>
 
-{!isHost && (
-<p style={{opacity:0.7,marginTop:"10px"}}>
-Host is controlling the video 🎬
-</p>
 )}
-
-</div>
 
 
 
