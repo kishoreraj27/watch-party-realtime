@@ -1,259 +1,57 @@
 import { useParams } from "react-router-dom";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import socket from "../socket";
 
-function Room() {
+import VideoPlayer from "../components/VideoPlayer";
+import Participants from "../components/Participants";
+import Chat from "../components/Chat";
+import Reactions from "../components/Reactions";
+import FloatingPlayer from "../components/FloatingPlayer";
+
+function Room(){
 
 const { id } = useParams();
-
-const videoRef = useRef(null);
-const chatEndRef = useRef(null);
-const isRemoteAction = useRef(false);
-
-const [messages,setMessages] = useState([]);
-const [input,setInput] = useState("");
-const [isHost,setIsHost] = useState(false);
-const [videoURL,setVideoURL] = useState("");
 
 const username =
 localStorage.getItem("watchparty-username") || "Guest";
 
+const [videoURL,setVideoURL] = useState("");
+const [messages,setMessages] = useState([]);
+const [input,setInput] = useState("");
+const [users,setUsers] = useState([]);
+const [hostId,setHostId] = useState("");
+const [typingUser,setTypingUser] = useState("");
 
-// ================= JOIN ROOM =================
 
+// JOIN
 useEffect(()=>{
 
-socket.emit("join-room",{
-roomId:id,
-username
-});
+socket.emit("join-room",{roomId:id,username});
 
+socket.on("users-update",setUsers);
+socket.on("host-changed",setHostId);
+socket.on("video-change",setVideoURL);
 
-// 🔥 PLAY
-socket.on("play",(time)=>{
-
-const video = videoRef.current;
-if(!video) return;
-
-isRemoteAction.current = true;
-
-const diff = Math.abs(video.currentTime - time);
-
-if(diff > 0.25){
-video.currentTime = time;
-}
-
-video.play();
-
-});
-
-
-// 🔥 PAUSE
-socket.on("pause",(time)=>{
-
-const video = videoRef.current;
-if(!video) return;
-
-isRemoteAction.current = true;
-
-const diff = Math.abs(video.currentTime - time);
-
-if(diff > 0.25){
-video.currentTime = time;
-}
-
-video.pause();
-
-});
-
-
-// 🔥 SEEK
-socket.on("seek",(time)=>{
-isRemoteAction.current = true;
-
-if(videoRef.current){
-videoRef.current.currentTime = time;
-}
-});
-
-
-// 🔥 VIDEO CHANGE
-socket.on("video-change",(url)=>{
-
-setVideoURL(url);
-
-setTimeout(()=>{
-videoRef.current?.load();
-},300);
-
-});
-
-
-// 🔥 HOST CHANGE
-socket.on("host-changed",(newHost)=>{
-
-if(socket.id === newHost){
-setIsHost(true);
-}else{
-setIsHost(false);
-}
-
-});
-
-
-// 🔥 CHAT
 socket.on("chat-message",(msg)=>{
 setMessages(prev=>[...prev,msg]);
 });
 
+socket.on("typing",(user)=>{
+setTypingUser(user);
 
-// CLEANUP
-return ()=>{
-
-socket.off("play");
-socket.off("pause");
-socket.off("seek");
-socket.off("video-change");
-socket.off("host-changed");
-socket.off("chat-message");
-
-};
-
-},[id]);
-
-
-// ================= AUTO SCROLL =================
-
-useEffect(()=>{
-chatEndRef.current?.scrollIntoView({
-behavior:"smooth"
-});
-},[messages]);
-
-
-// ================= LOCAL CONTROLS =================
-
-const handlePlay = ()=>{
-
-if(!isHost) return;
-
-if(isRemoteAction.current){
-isRemoteAction.current=false;
-return;
-}
-
-socket.emit("play",{
-roomId:id,
-time:videoRef.current.currentTime
-});
-};
-
-const handlePause = ()=>{
-
-if(!isHost) return;
-
-if(isRemoteAction.current){
-isRemoteAction.current=false;
-return;
-}
-
-socket.emit("pause",{
-roomId:id,
-time:videoRef.current.currentTime
-});
-};
-
-const handleSeek = ()=>{
-
-if(!isHost) return;
-
-if(isRemoteAction.current){
-isRemoteAction.current=false;
-return;
-}
-
-socket.emit("seek",{
-roomId:id,
-time:videoRef.current.currentTime
-});
-};
-
-
-
-// ================= VIDEO UPLOAD =================
-
-const uploadVideo = async(file)=>{
-
-if(!file) return;
-
-const formData = new FormData();
-formData.append("video",file);
-
-try{
-
-const res = await fetch(
-`${import.meta.env.VITE_BACKEND_URL}/upload`,
-{
-method:"POST",
-body:formData
-}
-);
-
-if(!res.ok){
-throw new Error("Upload failed");
-}
-
-const data = await res.json();
-
-setVideoURL(data.url);
-
-socket.emit("video-change",{
-roomId:id,
-url:data.url
+setTimeout(()=>setTypingUser(""),1500);
 });
 
-}catch(err){
-alert("Upload failed — try again.");
-}
-
-};
+},[]);
 
 
-
-// ================= GOOGLE DRIVE =================
-
-const convertDriveLink = (link)=>{
-
-let fileId="";
-
-if(link.includes("/file/d/")){
-fileId = link.split("/file/d/")[1].split("/")[0];
-}
-else if(link.includes("id=")){
-fileId = link.split("id=")[1];
-}
-
-if(!fileId){
-alert("Invalid Google Drive link");
-return "";
-}
-
-// iframe preview (ONLY reliable way)
-return `https://drive.google.com/file/d/${fileId}/preview`;
-};
-
-
-
-// ================= CHAT =================
-
+// SEND CHAT
 const sendMessage = ()=>{
-
-if(!input.trim()) return;
 
 socket.emit("chat-message",{
 roomId:id,
-message:input,
-user:username
+user:username,
+message:input
 });
 
 setInput("");
@@ -261,53 +59,36 @@ setInput("");
 };
 
 
+// SEND TYPING
+useEffect(()=>{
+if(input){
+socket.emit("typing",{roomId:id,user:username});
+}
+},[input]);
 
-// ================= UI =================
+
+// REACTIONS
+const sendReaction = (emoji)=>{
+socket.emit("reaction",{roomId:id,emoji});
+};
+
+
+// VIDEO CONTROL PLACEHOLDER
+const handlePlay = ()=>{};
+const handlePause = ()=>{};
+const handleSeek = ()=>{};
+
 
 return(
 
 <div style={{
+padding:"20px",
+background:"#020617",
 minHeight:"100vh",
-background:"linear-gradient(135deg,#0f172a,#020617)",
-display:"flex",
-justifyContent:"center",
-alignItems:"center",
 color:"white"
 }}>
 
-<div style={{
-width:"95%",
-maxWidth:"1400px",
-background:"rgba(255,255,255,0.05)",
-backdropFilter:"blur(20px)",
-borderRadius:"20px",
-padding:"25px",
-boxShadow:"0 20px 80px rgba(0,0,0,0.6)"
-}}>
-
-<h2>
-🎬 Room: {id}
-{isHost && " 👑 Host"}
-
-<button
-onClick={()=>{
-navigator.clipboard.writeText(window.location.href);
-alert("Invite link copied!");
-}}
-style={{
-marginLeft:"20px",
-padding:"8px 14px",
-borderRadius:"8px",
-border:"none",
-background:"#22c55e",
-color:"white",
-cursor:"pointer"
-}}
->
-Copy Invite 🔗
-</button>
-</h2>
-
+<Participants users={users} hostId={hostId}/>
 
 <div style={{
 display:"grid",
@@ -316,181 +97,36 @@ gap:"20px",
 marginTop:"20px"
 }}>
 
-{/* ================= VIDEO SIDE ================= */}
+<div style={{position:"relative"}}>
 
-<div>
-
-{/* HOST CONTROLS */}
-
-{isHost && (
-<>
-<input
-type="file"
-accept="video/*"
-onChange={(e)=>uploadVideo(e.target.files[0])}
-style={{marginBottom:"10px"}}
+<VideoPlayer
+videoURL={videoURL}
+isHost={socket.id===hostId}
+handlePlay={handlePlay}
+handlePause={handlePause}
+handleSeek={handleSeek}
 />
 
-<input
-placeholder="Paste Google Drive link & press Enter"
-onKeyDown={(e)=>{
-if(e.key==="Enter"){
+<Reactions sendReaction={sendReaction}/>
 
-const url = convertDriveLink(e.target.value);
-
-if(!url) return;
-
-setVideoURL(url);
-
-socket.emit("video-change",{
-roomId:id,
-url
-});
-}
-}}
-style={{
-width:"100%",
-padding:"10px",
-borderRadius:"8px",
-border:"none",
-marginBottom:"10px"
-}}
-/>
-</>
-)}
-
-
-
-{/* VIDEO / DRIVE / PLACEHOLDER */}
-
-{!videoURL ? (
-
-<div style={{
-height:"420px",
-display:"flex",
-justifyContent:"center",
-alignItems:"center",
-borderRadius:"15px",
-background:"rgba(255,255,255,0.05)",
-boxShadow:"0 10px 40px rgba(0,0,0,0.7)",
-fontSize:"20px",
-opacity:0.7
-}}>
-Upload a video to start the party 🎬
 </div>
 
-) : videoURL.includes("drive.google.com") ? (
-
-<iframe
-src={videoURL}
-width="100%"
-height="420"
-allow="autoplay"
-style={{
-borderRadius:"15px",
-border:"none",
-boxShadow:"0 10px 40px rgba(0,0,0,0.7)"
-}}
+<Chat
+messages={messages}
+input={input}
+setInput={setInput}
+sendMessage={sendMessage}
+typingUser={typingUser}
 />
 
-) : (
+</div>
 
-<video
-ref={videoRef}
-width="100%"
-controls={isHost}
-onPlay={handlePlay}
-onPause={handlePause}
-onSeeked={handleSeek}
-style={{
-borderRadius:"15px",
-boxShadow:"0 10px 40px rgba(0,0,0,0.7)"
-}}
->
-<source src={videoURL} type="video/mp4"/>
-</video>
-
-)}
-
-{!isHost && (
-<p style={{opacity:0.7,marginTop:"10px"}}>
-Host is controlling the video 🎬
-</p>
-)}
+<FloatingPlayer videoURL={videoURL}/>
 
 </div>
 
-
-
-{/* ================= CHAT ================= */}
-
-<div style={{
-background:"rgba(0,0,0,0.3)",
-padding:"15px",
-borderRadius:"12px",
-display:"flex",
-flexDirection:"column",
-height:"500px"
-}}>
-
-<div style={{
-flex:1,
-overflowY:"auto"
-}}>
-
-{messages.map((msg,i)=>(
-<div key={i} style={{marginBottom:"8px"}}>
-<strong>{msg.user}:</strong> {msg.message}
-</div>
-))}
-
-<div ref={chatEndRef}/>
-
-</div>
-
-
-<div style={{marginTop:"10px"}}>
-
-<input
-value={input}
-onChange={(e)=>setInput(e.target.value)}
-onKeyDown={(e)=>{
-if(e.key==="Enter"){
-sendMessage();
-}
-}}
-placeholder="Type message..."
-style={{
-width:"70%",
-padding:"10px",
-borderRadius:"8px",
-border:"none",
-marginRight:"8px"
-}}
-/>
-
-<button
-onClick={sendMessage}
-style={{
-padding:"10px 16px",
-borderRadius:"8px",
-border:"none",
-background:"#ff4d6d",
-color:"white",
-cursor:"pointer"
-}}
->
-Send
-</button>
-
-</div>
-
-</div>
-
-</div>
-</div>
-</div>
 );
+
 }
 
 export default Room;
