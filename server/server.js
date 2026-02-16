@@ -72,18 +72,39 @@ console.log("User connected:",socket.id);
 
 
 // JOIN ROOM
-socket.on("join-room",({roomId, username})=>{
+// STORE ROOMS
+const rooms = {};
 
-socket.username = username;
+io.on("connection", (socket) => {
+
+socket.on("join-room", ({ roomId, username }) => {
 socket.join(roomId);
 
-io.to(roomId).emit("chat-message",{
-   user:"System",
-   message:`${username} joined the party 🎉`
+// CREATE ROOM if not exists
+if(!rooms[roomId]){
+
+rooms[roomId] = {
+host: socket.id,
+users: {}
+};
+
+// 👑 TELL HOST
+socket.emit("host-changed", socket.id);
+
+}
+
+rooms[roomId].users[socket.id] = username;
+
+
+// Notify chat
+io.to(roomId).emit("chat-message", {
+user:"System",
+message:`${username} joined the party 🎉`
 });
 
 });
 
+});
 
 
 // PLAY
