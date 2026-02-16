@@ -2,7 +2,7 @@ import { useParams } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import socket from "../socket";
 
-function Room(){
+function Room() {
 
 const { id } = useParams();
 
@@ -15,7 +15,8 @@ const [input,setInput] = useState("");
 const [isHost,setIsHost] = useState(false);
 const [videoURL,setVideoURL] = useState("");
 
-const username = localStorage.getItem("watchparty-username") || "Guest";
+const username =
+localStorage.getItem("watchparty-username") || "Guest";
 
 
 // ================= JOIN ROOM =================
@@ -38,7 +39,7 @@ isRemoteAction.current = true;
 
 const diff = Math.abs(video.currentTime - time);
 
-if(diff > 0.3){
+if(diff > 0.25){
 video.currentTime = time;
 }
 
@@ -57,7 +58,7 @@ isRemoteAction.current = true;
 
 const diff = Math.abs(video.currentTime - time);
 
-if(diff > 0.3){
+if(diff > 0.25){
 video.currentTime = time;
 }
 
@@ -81,7 +82,6 @@ socket.on("video-change",(url)=>{
 
 setVideoURL(url);
 
-// small delay helps browser reload source
 setTimeout(()=>{
 videoRef.current?.load();
 },300);
@@ -94,7 +94,6 @@ socket.on("host-changed",(newHost)=>{
 
 if(socket.id === newHost){
 setIsHost(true);
-alert("You are the Host 👑");
 }else{
 setIsHost(false);
 }
@@ -123,11 +122,13 @@ socket.off("chat-message");
 },[id]);
 
 
-// AUTO SCROLL CHAT
-useEffect(()=>{
-chatEndRef.current?.scrollIntoView({behavior:"smooth"});
-},[messages]);
+// ================= AUTO SCROLL =================
 
+useEffect(()=>{
+chatEndRef.current?.scrollIntoView({
+behavior:"smooth"
+});
+},[messages]);
 
 
 // ================= LOCAL CONTROLS =================
@@ -145,7 +146,6 @@ socket.emit("play",{
 roomId:id,
 time:videoRef.current.currentTime
 });
-
 };
 
 const handlePause = ()=>{
@@ -161,7 +161,6 @@ socket.emit("pause",{
 roomId:id,
 time:videoRef.current.currentTime
 });
-
 };
 
 const handleSeek = ()=>{
@@ -177,12 +176,11 @@ socket.emit("seek",{
 roomId:id,
 time:videoRef.current.currentTime
 });
-
 };
 
 
 
-// ================= UPLOAD =================
+// ================= VIDEO UPLOAD =================
 
 const uploadVideo = async(file)=>{
 
@@ -193,10 +191,13 @@ formData.append("video",file);
 
 try{
 
-const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/upload`,{
+const res = await fetch(
+`${import.meta.env.VITE_BACKEND_URL}/upload`,
+{
 method:"POST",
 body:formData
-});
+}
+);
 
 if(!res.ok){
 throw new Error("Upload failed");
@@ -221,9 +222,9 @@ alert("Upload failed — try again.");
 
 // ================= GOOGLE DRIVE =================
 
-const convertDriveLink = (link) => {
+const convertDriveLink = (link)=>{
 
-let fileId = "";
+let fileId="";
 
 if(link.includes("/file/d/")){
 fileId = link.split("/file/d/")[1].split("/")[0];
@@ -237,7 +238,7 @@ alert("Invalid Google Drive link");
 return "";
 }
 
-// ⭐ Use preview — MUCH more stable
+// iframe preview (ONLY reliable way)
 return `https://drive.google.com/file/d/${fileId}/preview`;
 };
 
@@ -305,7 +306,6 @@ cursor:"pointer"
 >
 Copy Invite 🔗
 </button>
-
 </h2>
 
 
@@ -316,15 +316,75 @@ gap:"20px",
 marginTop:"20px"
 }}>
 
+{/* ================= VIDEO SIDE ================= */}
 
-{/* SMART VIDEO PLAYER */}
+<div>
 
-{videoURL && videoURL.includes("drive.google.com") ? (
+{/* HOST CONTROLS */}
+
+{isHost && (
+<>
+<input
+type="file"
+accept="video/*"
+onChange={(e)=>uploadVideo(e.target.files[0])}
+style={{marginBottom:"10px"}}
+/>
+
+<input
+placeholder="Paste Google Drive link & press Enter"
+onKeyDown={(e)=>{
+if(e.key==="Enter"){
+
+const url = convertDriveLink(e.target.value);
+
+if(!url) return;
+
+setVideoURL(url);
+
+socket.emit("video-change",{
+roomId:id,
+url
+});
+}
+}}
+style={{
+width:"100%",
+padding:"10px",
+borderRadius:"8px",
+border:"none",
+marginBottom:"10px"
+}}
+/>
+</>
+)}
+
+
+
+{/* VIDEO / DRIVE / PLACEHOLDER */}
+
+{!videoURL ? (
+
+<div style={{
+height:"420px",
+display:"flex",
+justifyContent:"center",
+alignItems:"center",
+borderRadius:"15px",
+background:"rgba(255,255,255,0.05)",
+boxShadow:"0 10px 40px rgba(0,0,0,0.7)",
+fontSize:"20px",
+opacity:0.7
+}}>
+Upload a video to start the party 🎬
+</div>
+
+) : videoURL.includes("drive.google.com") ? (
 
 <iframe
 src={videoURL}
 width="100%"
-height="500"
+height="420"
 allow="autoplay"
 style={{
 borderRadius:"15px",
@@ -347,18 +407,22 @@ borderRadius:"15px",
 boxShadow:"0 10px 40px rgba(0,0,0,0.7)"
 }}
 >
-
-{videoURL && (
 <source src={videoURL} type="video/mp4"/>
-)}
-
 </video>
 
 )}
 
+{!isHost && (
+<p style={{opacity:0.7,marginTop:"10px"}}>
+Host is controlling the video 🎬
+</p>
+)}
+
+</div>
 
 
-{/* CHAT */}
+
+{/* ================= CHAT ================= */}
 
 <div style={{
 background:"rgba(0,0,0,0.3)",
